@@ -3,20 +3,26 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import os
 
-load_dotenv()  # Load variables from .env
+load_dotenv()
 
+# Setup OpenAI with environment variable
 openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app = Flask(__name__)
 
+@app.route("/")
+def home():
+    return "Hello from the Consulate Bot 👋"
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.get_json()
-    user_message = data.get("message", "")
+    data = request.form  # <-- Twilio sends as form data, not JSON!
+    user_message = data.get("Body", "")  # WhatsApp message body
+    sender = data.get("From", "")  # Optional: who sent the message
 
-    print(f"User said: {user_message}")
+    print(f"User ({sender}) said: {user_message}")
 
-    # Talk to GPT
+    # OpenAI Chat Completion
     response = openai.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": user_message}],
@@ -25,12 +31,11 @@ def webhook():
     reply = response.choices[0].message.content
     print(f"Bot says: {reply}")
 
-    return jsonify({"reply": reply})
+    # Twilio needs a specific XML (TwiML) format in response
+    return f"""
+        <Response>
+            <Message>{reply}</Message>
+        </Response>
+    """, 200, {'Content-Type': 'application/xml'}
 
 
-if __name__ == "__main__":
-    app.run(port=5000)
-
-@app.route("/")
-def home():
-    return "Hello from the Consulate Bot 👋"
